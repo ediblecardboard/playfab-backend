@@ -1,3 +1,4 @@
+console.log("🔥 NEW VERSION DEPLOYED");
 const express = require("express");
 const fetch = require("node-fetch");
 const rateLimit = require("express-rate-limit");
@@ -6,46 +7,51 @@ const crypto = require("crypto");
 const app = express();
 app.use(express.json());
 
-// 🔒 CONFIG
-const PLAYFAB_TITLE_ID = "YOUR_TITLE_ID";
-const PLAYFAB_SECRET_KEY = "YOUR_SECRET_KEY";
+// ✅ USE ENV VARIABLES FOR EVERYTHING
+const PLAYFAB_TITLE_ID = process.env.PLAYFAB_TITLE_ID;
+const PLAYFAB_SECRET_KEY = process.env.PLAYFAB_SECRET_KEY;
 const SALT = "your_super_secret_salt";
 
-// 🛑 Rate limit (5 requests per minute per IP)
-const limiter = rateLimit({
+// 🔍 Debug (VERY IMPORTANT)
+console.log("TITLE ID:", PLAYFAB_TITLE_ID);
+console.log("SECRET KEY LOADED:", PLAYFAB_SECRET_KEY ? "YES" : "NO");
+
+// 🛑 Rate limit
+app.use("/createAccount", rateLimit({
     windowMs: 60 * 1000,
     max: 5
-});
-app.use("/createAccount", limiter);
+}));
 
-// 🔐 Hash function
+// 🔐 Hash
 function sha256(data) {
     return crypto.createHash("sha256").update(data).digest("hex");
 }
 
-// ✅ Create account endpoint
+// ✅ CREATE ACCOUNT
 app.post("/createAccount", async (req, res) => {
+    console.log("📥 Incoming request:", req.body);
+
     const { deviceId, timestamp, hash } = req.body;
 
-    if (!deviceId || !timestamp || !hash) {
+    if (!deviceId || !timestamp || !hash)
         return res.status(400).json({ error: "Missing fields" });
-    }
 
-    // ⏱ Check timestamp (anti-replay)
-    const now = Date.now();
-    if (Math.abs(now - timestamp) > 30000) {
+    if (Math.abs(Date.now() - timestamp) > 30000)
         return res.status(400).json({ error: "Request expired" });
-    }
 
-    // 🔐 Verify hash
-    const expectedHash = sha256(deviceId + "_" + timestamp + "_" + SALT);
-    if (expectedHash !== hash) {
+    const expected = sha256(`${deviceId}_${timestamp}_${SALT}`);
+
+    if (expected !== hash)
         return res.status(403).json({ error: "Invalid signature" });
-    }
 
     try {
-        // 🎮 Call PlayFab Server API
-        const response = await fetch(`https://${PLAYFAB_TITLE_ID}.playfabapi.com/Server/LoginWithCustomID`, {
+        console.log("🎮 Creating PlayFab account...");
+
+        const url = `https://${PLAYFAB_TITLE_ID}.playfabapi.com/Server/LoginWithCustomID`;
+
+        console.log("🌐 URL:", url);
+
+        const response = await fetch(url, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -59,22 +65,31 @@ app.post("/createAccount", async (req, res) => {
 
         const data = await response.json();
 
-        if (data.error) {
-            return res.status(400).json(data);
+        console.log("📡 PlayFab response:", data);
+
+        if (!response.ok || data.error) {
+            return res.status(400).json({
+                error: data.errorMessage || "PlayFab error",
+                full: data
+            });
         }
 
-        return res.json({ success: true });
-    }
-    catch (err) {
-        console.error(err);
+        return res.json({
+            success: true,
+            playFabId: data.data?.PlayFabId
+        });
+
+    } catch (err) {
+        console.error("🔥 Server error:", err);
         return res.status(500).json({ error: "Server error" });
     }
 });
 
+// test route
 app.get("/", (req, res) => {
     res.send("Backend running");
 });
 
 app.listen(3000, () => {
-    console.log("Server running on port 3000");
+    console.log("🚀 Server running");
 });
