@@ -57,6 +57,7 @@ async function playfabLogin(customId, createAccount) {
 
     const url =
         `https://${PLAYFAB_TITLE_ID}.playfabapi.com/Server/LoginWithCustomID`;
+    console.log("[PlayFab] ACTUAL REQUEST URL:", url);
 
     for (let attempt = 1; attempt <= 5; attempt++) {
 
